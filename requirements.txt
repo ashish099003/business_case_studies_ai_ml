@@ -1,0 +1,11 @@
+# Core ML / Data Science
+scikit-learn
+matplotlib
+seaborn
+
+# Deep Learning
+tensorflow
+
+# Optional but commonly required dependencies
+numpy
+pandas
