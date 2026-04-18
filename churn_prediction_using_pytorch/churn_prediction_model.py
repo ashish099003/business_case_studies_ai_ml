@@ -308,3 +308,200 @@ plt.show()
 print("\nTop 3 Most Important Features:")
 for i, row in importance_df.head(3).iterrows():
     print(f"  {row['Feature']}: {row['Importance']:.4f}")
+
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+
+# 🎯 PyTorch Best Practices
+
+print("=" * 60)
+print("PYTORCH BEST PRACTICES")
+print("=" * 60)
+
+# 1. Reproducibility
+print("1. ENSURING REPRODUCIBILITY")
+print("-" * 40)
+
+def set_seed(seed=42):
+    """Set seeds for reproducibility"""
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+set_seed(42)
+print("✅ All random seeds set for reproducibility")
+
+# 2. Model Checkpointing
+print("\n2. MODEL CHECKPOINTING")
+print("-" * 40)
+
+def save_checkpoint(model, optimizer, epoch, loss, path='checkpoint.pth'):
+    """Save model checkpoint"""
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss,
+    }, path)
+    print(f"✅ Checkpoint saved to {path}")
+
+def load_checkpoint(model, optimizer, path='checkpoint.pth'):
+    """Load model checkpoint"""
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch = checkpoint['epoch']
+    loss = checkpoint['loss']
+    print(f"✅ Checkpoint loaded from epoch {epoch}")
+    return model, optimizer, epoch, loss
+
+# Example usage
+test_model = ChurnPredictor(8)
+test_optimizer = optim.Adam(test_model.parameters())
+save_checkpoint(test_model, test_optimizer, 10, 0.5)
+
+# 3. Memory Management
+print("\n3. MEMORY MANAGEMENT")
+print("-" * 40)
+
+def print_memory_usage():
+    """Print current GPU memory usage"""
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated() / 1024**2
+        cached = torch.cuda.memory_reserved() / 1024**2
+        print(f"GPU Memory - Allocated: {allocated:.2f} MB, Cached: {cached:.2f} MB")
+
+        # Clear cache if needed
+        torch.cuda.empty_cache()
+        print("✅ GPU cache cleared")
+    else:
+        print("⚠️ GPU not available")
+
+print_memory_usage()
+
+# 4. Debugging Tools
+print("\n4. DEBUGGING TOOLS")
+print("-" * 40)
+
+def check_gradients(model):
+    """Check for gradient issues"""
+    total_norm = 0
+    grad_norms = []
+
+    for p in model.parameters():
+        if p.grad is not None:
+            param_norm = p.grad.data.norm(2)
+            grad_norms.append(param_norm.item())
+            total_norm += param_norm.item() ** 2
+
+    total_norm = total_norm ** 0.5
+
+    if total_norm > 100:
+        print(f"⚠️ Large gradient norm: {total_norm:.2f}")
+    elif total_norm < 1e-6:
+        print(f"⚠️ Vanishing gradients: {total_norm:.2e}")
+    else:
+        print(f"✅ Gradient norm healthy: {total_norm:.4f}")
+
+    return total_norm
+
+# Test gradient checking
+test_model = ChurnPredictor(8)
+dummy_loss = test_model(torch.randn(32, 8)).sum()
+dummy_loss.backward()
+check_gradients(test_model)
+
+# 5. Performance Profiling
+print("\n5. PERFORMANCE PROFILING")
+print("-" * 40)
+
+def profile_model(model, input_shape=(32, 8)):
+    """Profile model performance"""
+    from torch.profiler import profile, ProfilerActivity
+
+    inputs = torch.randn(input_shape)
+
+    with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
+        for _ in range(10):
+            _ = model(inputs)
+
+    # Print top operations by time
+    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=5))
+
+# Uncomment to run profiling (generates detailed output)
+# profile_model(test_model)
+print("✅ Profiling tools ready (uncomment to run)")
+
+# 6. Data Pipeline Optimization
+print("\n6. DATA PIPELINE OPTIMIZATION")
+print("-" * 40)
+
+# Efficient data loading settings
+optimal_batch_size = 32
+num_workers = 4 if torch.cuda.is_available() else 0
+pin_memory = torch.cuda.is_available()
+
+print(f"Optimal settings for your system:")
+print(f"  Batch size: {optimal_batch_size}")
+print(f"  Num workers: {num_workers}")
+print(f"  Pin memory: {pin_memory}")
+
+# 7. Model Summary
+print("\n7. MODEL SUMMARY")
+print("-" * 40)
+
+def model_summary(model, input_size):
+    """Print model summary"""
+    def register_hook(module):
+        def hook(module, input, output):
+            class_name = str(module.__class__).split(".")[-1].split("'")[0]
+            module_idx = len(summary)
+
+            m_key = f"{class_name}-{module_idx+1}"
+            summary[m_key] = {}
+            summary[m_key]["input_shape"] = list(input[0].size())
+            summary[m_key]["output_shape"] = list(output.size())
+
+            params = 0
+            for p in module.parameters():
+                params += p.numel()
+            summary[m_key]["nb_params"] = params
+
+    summary = {}
+    hooks = []
+
+    model.eval()
+    for layer in model.modules():
+        if not isinstance(layer, nn.Sequential) and            not isinstance(layer, nn.ModuleList) and            layer != model:
+            hooks.append(layer.register_forward_hook(register_hook))
+
+    input = torch.zeros(1, *input_size)
+    model(input)
+
+    for h in hooks:
+        h.remove()
+
+    print("Layer (type)               Output Shape         Param #")
+    print("=" * 60)
+    total_params = 0
+    for layer in summary:
+        line = f"{layer:25} {str(summary[layer]['output_shape']):20} {summary[layer]['nb_params']:,}"
+        print(line)
+        total_params += summary[layer]['nb_params']
+    print("=" * 60)
+    print(f"Total params: {total_params:,}")
+
